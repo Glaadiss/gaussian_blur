@@ -1,0 +1,7 @@
+CHANGELOG
+
+0.1 - 16.10.2018
+
+Przykładowa funckja w asm dodająca dwie liczby oraz to samo w cpp.
+Tworzenie bibliotek dynamicznych z cpp i asm - wywołanie ich w main
+

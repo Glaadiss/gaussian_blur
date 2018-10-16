@@ -1,0 +1,4 @@
+Zrodla/main
+*.o
+*.so
+.vscode
