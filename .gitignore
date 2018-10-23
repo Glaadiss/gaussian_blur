@@ -1,4 +1,8 @@
 Zrodla/main
 *.o
 *.so
+*.dylib
 .vscode
+others
+**/build
+*.bmp

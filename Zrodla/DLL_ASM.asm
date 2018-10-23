@@ -1,14 +1,14 @@
+;RDI width
+;RDI+4 height
+;RDI+8 r
+
 section .text
 
-global sumuj
-segment .text
-sumuj:
+global _sumuj
 
-	mov rax, rdi        ; RAX=b
+segment .text
+_sumuj:
+	mov rax, [rdi]     ; RAX=b
 	add rax, rsi        ; RAX=RAX+a 
 	ret		            ; koniec funkcji
-                        ; zwracana wartość funkcji przekazywana jest do programu poprzez rejestr RAX
 
-section .data
-napis db "<<<FUNCJA SUMUJ>>>",0Ah
-offset equ $ - napis
