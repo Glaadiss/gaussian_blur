@@ -313,6 +313,9 @@ Image *asm_function(Image *target, int b)
 
 int main(int argc, char *argv[])
 {
+    long numofcpus = sysconf(_SC_NPROCESSORS_ONLN); // Get the number of logical CPUs.
+    printf("Cores number: %ld\n", numofcpus);
+
     FILE *file_in = fopen("big.bmp", "rb");
     if (!file_in)
     {
