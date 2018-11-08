@@ -209,7 +209,7 @@ extern void box_blur_t(Image *source, Image *target, int w, int h, int radius)
 
 extern void box_blur(Image *source, Image *target, int w, int h, int radius)
 {
-    copy_image(source, target);
+    // copy_image(source, target);
     box_blur_h(target, source, w, h, radius);
     box_blur_t(source, target, w, h, radius);
 }
@@ -232,6 +232,8 @@ extern Image *gaussian_blur(Image *source, double radius)
     }
 
     int *bxs = boxes_for_gauss(5, 3);
+    copy_image(source, target);
+
     box_blur(source, target, width, height, (bxs[0] - 1) / 2);
     box_blur(target, source, width, height, (bxs[1] - 1) / 2);
     box_blur(source, target, width, height, (bxs[2] - 1) / 2);

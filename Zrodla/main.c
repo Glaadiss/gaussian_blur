@@ -27,13 +27,13 @@ typedef struct image_t
 // common
 void write_pixel_to_file(Image *const source)
 {
-    FILE *file = fopen("../build/pixel.data", "w");
-    for (int h = 0; h < 100; ++h)
+    FILE *file = fopen("pixel.data", "w");
+    for (int h = 0; h < 50; ++h)
     {
-        for (int w = 0; w < 100; ++w)
+        for (int w = 0; w < 50; ++w)
         {
             Pixel current_pixel = source->data[h][w];
-            // fprintf(file, "(%d,%d,%d)", (int)current_pixel.r, (int)current_pixel.g, (int)current_pixel.b);
+            fprintf(file, "(%d,%d,%d)", (int)current_pixel.r, (int)current_pixel.g, (int)current_pixel.b);
         }
         fprintf(file, "\n");
     }
@@ -213,6 +213,7 @@ write_error_code_t to_bmp(FILE *out, Image *const img)
 
 // Pixel **(*funkcja)(Image *, int);
 Image *(*fun1)(Image *, int);
+Pixel **(*pixFunc)(Pixel **, int);
 
 void *Biblioteka;
 const char *error;
@@ -232,61 +233,70 @@ Image *cpp_function(Image *target, int b)
     return wynik;
 }
 
-Image *asm_function(Image *target, int b)
+Pixel *asm_function(Pixel **pixel, int max)
 {
     Biblioteka = dlopen("../build/libDLL_ASM.dylib", RTLD_LAZY);
-
+    printf("PIXE %d \n", pixel[0]->r);
     error = dlerror();
-    *(void **)(&fun1) = dlsym(Biblioteka, "sumuj");
-    // *(void **)(&fun1) = dlsym(Biblioteka2, "sumuj");
+    *(void **)(&pixFunc) = dlsym(Biblioteka, "sumuj");
 
-    // printf("nr1: %d\n", (*fun1)(target, 4));
+    Pixel *pixe = (*pixFunc)(pixel[0], max);
 
-    Image *wynik = (*fun1)(target, 4);
+    // printf("PIXE works \n");
+    // printf("r: %d\n", pixel->r);
+    // printf("r: %d\n", pixe);
+    // printf("PIXE %d %d %d \n", pixe[0]->r, pixe[0]->g, pixe[0]->b);
     dlclose(Biblioteka);
 
-    return wynik;
+    return pixel;
 }
 
 struct arg_struct
 {
+    Pixel **startFrom;
     int current;
     int allParts;
     Image *image;
 };
 
-void *Compare(void *arguments)
+void *SEND_DATA(void *arguments)
 {
+
     struct arg_struct *args = arguments;
+    int rowsNumber = args->image->height / 4;
+    int shift = rowsNumber * args->image->width;
     Image *image = args->image;
-    printf("\nThread %d, %d", args->current, args->allParts);
-    Pixel current_pixel = image->data[0][0];
-    printf("(%d,%d,%d) \n", (int)current_pixel.r, (int)current_pixel.g, (int)current_pixel.b);
+    printf("\n Thread %d, %d \n", args->current, args->allParts);
+    Pixel current_pixel = image->data[args->current * rowsNumber][0];
+    printf("PERFECT (%d,%d,%d)\n", (int)current_pixel.r, (int)current_pixel.g, args->allParts);
+    int max = (args->image->height + 1) / args->allParts * (args->image->width + 1) * 3;
+    asm_function(&args->image->data[args->current * args->image->height / args->allParts], max);
 
     return NULL;
 }
 
 void handleThreads(int n, Image *data)
 {
+    int rowsNumber = data->height / n;
     int thread_cmp_count = n;
     int t, index, thread = 0;
-
     pthread_t *cmp_thread = malloc(thread_cmp_count * sizeof(pthread_t));
     struct arg_struct *args = malloc(thread_cmp_count * sizeof(struct arg_struct));
 
     for (int i = 0; i < n; i++)
     {
         struct arg_struct arg;
+        arg.startFrom = &data->data[i * rowsNumber];
         arg.current = i;
         arg.allParts = n;
         arg.image = data;
         args[i] = arg;
-        pthread_create(&cmp_thread[i], NULL, &Compare, (void *)&args[i]);
+        pthread_create(&cmp_thread[i], NULL, &SEND_DATA, (void *)&args[i]);
     }
 
     for (int i = 0; i < n; i++)
     {
-        pthread_join(cmp_thread[n], NULL);
+        pthread_join(cmp_thread[i], NULL);
     }
 
     free(args);
@@ -332,18 +342,13 @@ int main(int argc, char *argv[])
     }
 
     // debugger
-    write_pixel_to_file(current_image);
-    handleThreads(numofcpus, current_image);
+
     Image *target;
-    unsigned char chouse = 'n';
-
-    // printf("nr: %d\n", (asm_function(current_image, 5)));
-    // Pixel pixl = (asm_function(current_image, 5))[1][1];
-
-    // pixl = current_image->data[0][0];
-    // printf("width: %d\n", (asm_function(current_image, 5))->width);
-    // printf("(%d,%d,%d)\n", (int)pixl.r, (int)pixl.g, (int)pixl.b);
     target = cpp_function(current_image, 5);
+    handleThreads(numofcpus, target);
+
+    printf("WORKS \n");
+    write_pixel_to_file(target);
 
     if (!target)
     {
