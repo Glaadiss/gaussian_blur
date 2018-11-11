@@ -19,7 +19,7 @@ typedef struct image_t
     uint32_t width;
     uint32_t height;
     Pixel **data;
-} Image;
+} __attribute__((__packed__)) Image;
 
 #define min(a, b) (((a) < (b)) ? (a) : (b))
 #define max(a, b) (((a) > (b)) ? (a) : (b))
@@ -28,7 +28,7 @@ typedef struct image_t
 void write_pixel_to_file(Image *const source)
 {
     FILE *file = fopen("pixel.data", "w");
-    for (int h = 0; h < 50; ++h)
+    for (int h = 0; h < source->height; ++h)
     {
         for (int w = 0; w < 50; ++w)
         {
@@ -212,14 +212,16 @@ write_error_code_t to_bmp(FILE *out, Image *const img)
 }
 
 // Pixel **(*funkcja)(Image *, int);
-Image *(*fun1)(Image *, int);
-Pixel **(*pixFunc)(Pixel **, int);
+Image *(*fun1)(Image *, Image *, int);
+Pixel *(*pixFunc)(Pixel **, int, int, Pixel **);
 
 void *Biblioteka;
 const char *error;
 
-Image *cpp_function(Image *target, int b)
+Image *cpp_function(Image *target, Image *current_image, int b)
 {
+    // printf("371 %d \n\n", 10);
+
     Biblioteka = dlopen("../build/blur.dylib", RTLD_LAZY);
     error = dlerror();
     if ((error = dlerror()) != NULL)
@@ -228,27 +230,26 @@ Image *cpp_function(Image *target, int b)
         exit(EXIT_FAILURE);
     }
     *(void **)(&fun1) = dlsym(Biblioteka, "gaussian_blur");
-    Image *wynik = (*fun1)(target, b);
+    Image *wynik = (*fun1)(target, current_image, b);
     dlclose(Biblioteka);
     return wynik;
 }
 
-Pixel *asm_function(Pixel **pixel, int max)
+void asm_function(Pixel **pixel, int max, int width, Pixel **data)
 {
     Biblioteka = dlopen("../build/libDLL_ASM.dylib", RTLD_LAZY);
-    printf("PIXE %d \n", pixel[0]->r);
+    // printf("PIXE %d \n", pixel[0]->r);
     error = dlerror();
     *(void **)(&pixFunc) = dlsym(Biblioteka, "sumuj");
 
-    Pixel *pixe = (*pixFunc)(pixel[0], max);
-
+    (*pixFunc)(pixel, max, width, data);
+    // Pixel *pix = (*pixFunc)(pixel, max, width, data);
+    // Pixel *p = pix;
     // printf("PIXE works \n");
-    // printf("r: %d\n", pixel->r);
+    // printf("(%d,%d,%d)\n", p->r, p->g, p->b);
     // printf("r: %d\n", pixe);
     // printf("PIXE %d %d %d \n", pixe[0]->r, pixe[0]->g, pixe[0]->b);
     dlclose(Biblioteka);
-
-    return pixel;
 }
 
 struct arg_struct
@@ -257,25 +258,34 @@ struct arg_struct
     int current;
     int allParts;
     Image *image;
+    Image *currentImage;
 };
+Pixel **getRow(Image *image, int current, int allParts)
+{
+    return &image->data[current * image->height / allParts];
+}
 
 void *SEND_DATA(void *arguments)
 {
 
     struct arg_struct *args = arguments;
-    int rowsNumber = args->image->height / 4;
-    int shift = rowsNumber * args->image->width;
+    if (args->current == 2)
+    {
+        return NULL;
+    }
+    int width = args->image->width * 3;
+    int height = args->image->height * 8 / args->allParts;
     Image *image = args->image;
-    printf("\n Thread %d, %d \n", args->current, args->allParts);
-    Pixel current_pixel = image->data[args->current * rowsNumber][0];
-    printf("PERFECT (%d,%d,%d)\n", (int)current_pixel.r, (int)current_pixel.g, args->allParts);
-    int max = (args->image->height + 1) / args->allParts * (args->image->width + 1) * 3;
-    asm_function(&args->image->data[args->current * args->image->height / args->allParts], max);
+    Image *current = args->currentImage;
+    Pixel **imageRow = getRow(image, args->current, args->allParts);
+    Pixel **currentRow = getRow(current, args->current, args->allParts);
+
+    asm_function(imageRow, height, width, currentRow);
 
     return NULL;
 }
 
-void handleThreads(int n, Image *data)
+void handleThreads(int n, Image *data, Image *currentImage)
 {
     int rowsNumber = data->height / n;
     int thread_cmp_count = n;
@@ -290,6 +300,7 @@ void handleThreads(int n, Image *data)
         arg.current = i;
         arg.allParts = n;
         arg.image = data;
+        arg.currentImage = currentImage;
         args[i] = arg;
         pthread_create(&cmp_thread[i], NULL, &SEND_DATA, (void *)&args[i]);
     }
@@ -343,9 +354,24 @@ int main(int argc, char *argv[])
 
     // debugger
 
-    Image *target;
-    target = cpp_function(current_image, 5);
-    handleThreads(numofcpus, target);
+    int width = current_image->width;
+    int height = current_image->height;
+    // allocate image
+    Image *target = malloc(sizeof(Image));
+
+    target->width = width;
+    target->height = height;
+
+    target->data = calloc(height, sizeof(Pixel *));
+    for (int row = 0; row < height; row++)
+    {
+        target->data[row] = calloc(width, sizeof(Pixel));
+    }
+    copy_image(current_image, target);
+
+    target = cpp_function(current_image, target, 5);
+
+    // handleThreads(1, target, current_image);
 
     printf("WORKS \n");
     write_pixel_to_file(target);

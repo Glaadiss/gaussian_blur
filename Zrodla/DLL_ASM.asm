@@ -1,6 +1,7 @@
-;RDI data
-;RSI bytes to go through
+;RDI data to save in
+;RSI heigh
 ;RDX width
+;Rcx new data
 
 
 ; function gaussBlur_1 (scl, tcl, w, h, r) {
@@ -21,30 +22,71 @@
 ; }
 
 
-
 section .data
-	digit equ 42
+	digit equ 255
+	next equ 8
 	zero equ 0
+	three equ 3
 	one equ 1
 	five equ 5
 	radius equ 5
+	blur equ 4
+	box  equ 9
+	ones times 3 db 1
 
+
+default rel 
 section .text
 
 global _sumuj
 
 segment .text
 _sumuj:
-	mov rax, zero
-	
-	
-	loop:
-	mov byte [rdi + rax], digit
-	inc rax
-	cmp rax, rsi	
+	xor r10, r10 ; zerowanie r10	
 
-	jne loop
+	loopInColumn:  
+	; mov rax, [rdi + r10] ; pierwszy pixel wiersza do rax
+	xor r11, r11 ; zerowanie r11
+
+	; mul r8, rdx
+	mov rax, [rdi + r10] ; n'ty wiersz
+	movaps xmm0, [rax] ; pierwszy pixel wiersza
+	; movaps xmm1, [rax + rdx - 6] ; ostatni pixel wiersza 
+	movaps xmm2, [ones]
+
+	; mov 
+	; mov rax, 
+	; movaps xmm1, [rax + ] ; ostatni pixel wiersza
+	; movaps xmm1, [rd]
+
+	loopInRow:
+	;------------------------------------------------------------------------------------
+	; xor r14, r14;
+	; loopInBox:
+
+	; mov [r16], []
+	; mov [r15], [r14]
+
+	; inc r14
+	; cmp r14, blur
 
 
-	mov rax, rdi      ; RAX=RAX+a 
+
+	; jle loopInBox
+	;------------------------------------------------------------------------------------
+
+
+	mov byte [rax + r11], digit ;  r
+	mov byte [rax + r11 + 1], digit ; g
+	mov byte [rax + r11 + 2], digit ; b
+
+
+
+	add r11, 3 ;nastepny pixel 
+	cmp r11, rdx
+	jl loopInRow
+		
+		add r10, next ; nastepny wiersz +8
+		cmp r10, rsi
+		jl loopInColumn
 	ret		            ; koniec funkcji
