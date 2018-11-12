@@ -9,30 +9,45 @@
 
 typedef struct pixel_t
 {
+    unsidgned char *data;
     unsigned char r;
     unsigned char g;
     unsigned char b;
-} __attribute__((__packed__)) Pixel;
+} Pixel;
 
-typedef struct image_t
+typedef struct avg_t
+{
+    unsigned int r;
+    unsigned int g;
+    unsigned int b;
+} Avg;
+
+typedef struct image_t_int
 {
     uint32_t width;
     uint32_t height;
     Pixel **data;
 } __attribute__((__packed__)) Image;
 
+typedef struct image_t
+{
+    uint32_t width;
+    uint32_t height;
+    Avg **data;
+} __attribute__((__packed__)) ImageInt;
+
 #define min(a, b) (((a) < (b)) ? (a) : (b))
 #define max(a, b) (((a) > (b)) ? (a) : (b))
 
 // common
-void write_pixel_to_file(Image *const source)
+void write_pixel_to_file(ImageInt *const source)
 {
     FILE *file = fopen("pixel.data", "w");
-    for (int h = 0; h < source->height; ++h)
+    for (int h = 0; h < 10; ++h)
     {
-        for (int w = 0; w < 50; ++w)
+        for (int w = 0; w < source->width; ++w)
         {
-            Pixel current_pixel = source->data[h][w];
+            Avg current_pixel = source->data[h][w];
             fprintf(file, "(%d,%d,%d)", (int)current_pixel.r, (int)current_pixel.g, (int)current_pixel.b);
         }
         fprintf(file, "\n");
@@ -49,13 +64,56 @@ void free_image(Image *source)
     free(source);
 }
 
-void copy_image(Image *source, Image *target)
+void free_imageInt(ImageInt *source)
 {
+    for (unsigned i = 0; i < source->height; ++i)
+    {
+        free(source->data[i]);
+    }
+    free(source->data);
+    free(source);
+}
+
+void copy_image(Image *source, ImageInt *target)
+{
+    int width = source->width;
+    int height = source->height;
+    target->width = width;
+    target->height = height;
+    target->data = calloc(height, sizeof(Avg *));
+    for (int row = 0; row < height; row++)
+    {
+        target->data[row] = calloc(width, sizeof(Avg));
+    }
     for (int row = 0; row < source->height; row++)
     {
         for (int coll = 0; coll < source->width; coll++)
         {
-            target->data[row][coll] = source->data[row][coll];
+            target->data[row][coll].r = source->data[row][coll].r;
+            target->data[row][coll].g = source->data[row][coll].g;
+            target->data[row][coll].b = source->data[row][coll].b;
+        }
+    }
+}
+
+void copy_for_bmp(ImageInt *source, Image *target)
+{
+    int width = source->width;
+    int height = source->height;
+    target->width = width;
+    target->height = height;
+    target->data = calloc(height, sizeof(Avg *));
+    for (int row = 0; row < height; row++)
+    {
+        target->data[row] = calloc(width, sizeof(Avg));
+    }
+    for (int row = 0; row < source->height; row++)
+    {
+        for (int coll = 0; coll < source->width; coll++)
+        {
+            target->data[row][coll].r = source->data[row][coll].r;
+            target->data[row][coll].g = source->data[row][coll].g;
+            target->data[row][coll].b = source->data[row][coll].b;
         }
     }
 }
@@ -128,7 +186,7 @@ typedef enum
 
 // function
 read_error_code_t from_bmp(FILE *in, Image **read);
-write_error_code_t to_bmp(FILE *out, Image *const img);
+write_error_code_t to_bmp(FILE *out, ImageInt *const img);
 
 read_error_code_t from_bmp(FILE *in, Image **read)
 {
@@ -164,8 +222,10 @@ read_error_code_t from_bmp(FILE *in, Image **read)
     return READ_OK;
 }
 
-write_error_code_t to_bmp(FILE *out, Image *const img)
+write_error_code_t to_bmp(FILE *out, ImageInt *const imgI)
 {
+    Image *img = malloc(sizeof(Image));
+    copy_for_bmp(imgI, img);
     // initialize header
     bmp_head head;
     head.bfType = 0x4d42;
@@ -208,17 +268,19 @@ write_error_code_t to_bmp(FILE *out, Image *const img)
             }
         }
     }
+    free(img);
     return WRITE_OK;
 }
 
 // Pixel **(*funkcja)(Image *, int);
-Image *(*fun1)(Image *, Image *, int);
-Pixel *(*pixFunc)(Pixel **, int, int, Pixel **);
+Image *(*fun1)(ImageInt *, ImageInt *, int);
+// Avg *(*pixFunc)(Avg **, int, int, Avg **);
+int (*pixFunc)(Avg **, int, int, Avg **);
 
 void *Biblioteka;
 const char *error;
 
-Image *cpp_function(Image *target, Image *current_image, int b)
+void *cpp_function(ImageInt *target, ImageInt *current_image, int b)
 {
     // printf("371 %d \n\n", 10);
 
@@ -232,17 +294,24 @@ Image *cpp_function(Image *target, Image *current_image, int b)
     *(void **)(&fun1) = dlsym(Biblioteka, "gaussian_blur");
     Image *wynik = (*fun1)(target, current_image, b);
     dlclose(Biblioteka);
-    return wynik;
+    return NULL;
 }
 
-void asm_function(Pixel **pixel, int max, int width, Pixel **data)
+void asm_function(Avg **pixel, int max, int width, Avg **data)
 {
     Biblioteka = dlopen("../build/libDLL_ASM.dylib", RTLD_LAZY);
     // printf("PIXE %d \n", pixel[0]->r);
     error = dlerror();
     *(void **)(&pixFunc) = dlsym(Biblioteka, "sumuj");
-
-    (*pixFunc)(pixel, max, width, data);
+    // (*pixFunc)(pixel, max, width, data);
+    Avg avg2 = pixel[0][0];
+    // printf("left: %lu \n right%lu\n DOWN:%lu\n", &pixel[0][0], &pixel[0][1], &pixel[1][0]);
+    printf("RET: (%d,%d,%d) \n", avg2.r, avg2.g, avg2.b);
+    printf("RET2: %lu\n", (*pixFunc)(pixel, max, width, data));
+    // Avg *avg = (*pixFunc)(pixel, max, width, data);
+    // printf("RET2: (%d,%d,%d) \n", avg->r, avg->g, avg->b);
+    // register int i asm("xmm2");
+    // printf("register: %d \n", i);
     // Pixel *pix = (*pixFunc)(pixel, max, width, data);
     // Pixel *p = pix;
     // printf("PIXE works \n");
@@ -254,13 +323,13 @@ void asm_function(Pixel **pixel, int max, int width, Pixel **data)
 
 struct arg_struct
 {
-    Pixel **startFrom;
+    Avg **startFrom;
     int current;
     int allParts;
-    Image *image;
-    Image *currentImage;
+    ImageInt *image;
+    ImageInt *currentImage;
 };
-Pixel **getRow(Image *image, int current, int allParts)
+Avg **getRow(ImageInt *image, int current, int allParts)
 {
     return &image->data[current * image->height / allParts];
 }
@@ -273,19 +342,19 @@ void *SEND_DATA(void *arguments)
     {
         return NULL;
     }
-    int width = args->image->width * 3;
+    int width = args->image->width * 12;
     int height = args->image->height * 8 / args->allParts;
-    Image *image = args->image;
-    Image *current = args->currentImage;
-    Pixel **imageRow = getRow(image, args->current, args->allParts);
-    Pixel **currentRow = getRow(current, args->current, args->allParts);
+    ImageInt *image = args->image;
+    ImageInt *current = args->currentImage;
+    Avg **imageRow = getRow(image, args->current, args->allParts);
+    Avg **currentRow = getRow(current, args->current, args->allParts);
 
     asm_function(imageRow, height, width, currentRow);
 
     return NULL;
 }
 
-void handleThreads(int n, Image *data, Image *currentImage)
+void handleThreads(int n, ImageInt *data, ImageInt *currentImage)
 {
     int rowsNumber = data->height / n;
     int thread_cmp_count = n;
@@ -354,24 +423,15 @@ int main(int argc, char *argv[])
 
     // debugger
 
-    int width = current_image->width;
-    int height = current_image->height;
     // allocate image
-    Image *target = malloc(sizeof(Image));
+    ImageInt *target = malloc(sizeof(ImageInt));
+    ImageInt *tmpTarget = malloc(sizeof(ImageInt));
 
-    target->width = width;
-    target->height = height;
-
-    target->data = calloc(height, sizeof(Pixel *));
-    for (int row = 0; row < height; row++)
-    {
-        target->data[row] = calloc(width, sizeof(Pixel));
-    }
     copy_image(current_image, target);
+    copy_image(current_image, tmpTarget);
 
-    target = cpp_function(current_image, target, 5);
-
-    // handleThreads(1, target, current_image);
+    cpp_function(tmpTarget, target, 5);
+    handleThreads(1, target, tmpTarget);
 
     printf("WORKS \n");
     write_pixel_to_file(target);
@@ -406,6 +466,7 @@ int main(int argc, char *argv[])
     }
 
     free_image(current_image);
-    free_image(target);
+    free_imageInt(target);
+    free_imageInt(tmpTarget);
     return 0;
 }
