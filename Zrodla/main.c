@@ -6,6 +6,7 @@
 #include <stdint.h>
 #include <unistd.h>
 #include <pthread.h>
+#include <time.h>
 
 typedef struct pixel_t
 {
@@ -278,7 +279,7 @@ write_error_code_t to_bmp(FILE *out, ImageInt *const imgI)
 // Pixel **(*funkcja)(Image *, int);
 Image *(*fun1)(ImageInt *, ImageInt *, int);
 // Avg *(*pixFunc)(Avg **, int, int, Avg **);
-unsigned int *(*pixFunc)(unsigned int **, int, int, unsigned int **);
+unsigned int *(*pixFunc)(unsigned int **, int, int, unsigned int **, int radius);
 
 void *Biblioteka;
 const char *error;
@@ -305,12 +306,12 @@ void asm_function(unsigned int **pixel, int max, int width, unsigned int **data)
     Biblioteka = dlopen("../build/libDLL_ASM.dylib", RTLD_LAZY);
     // printf("PIXE %d \n", pixel[0]->r);
     error = dlerror();
-    *(void **)(&pixFunc) = dlsym(Biblioteka, "sumuj");
-    (*pixFunc)(pixel, max, width, data);
+    *(void **)(&pixFunc) = dlsym(Biblioteka, "gaussian_blur");
+    // (*pixFunc)(pixel, max, width, data);
     // unsigned int *avg2 = pixel[0][0];
     // printf("left: %lu \n right%lu\n DOWN:%lu\n", &pixel[0][0], &pixel[0][1], &pixel[1][0]);
     // printf("RET: (%d,%d,%d) \n", avg2[0], avg2[1], avg2[2]);
-    printf("RET2: %d\n", (*pixFunc)(pixel, max, width, data));
+    printf("RET2: %d\n", (*pixFunc)(pixel, max, width, data, 5));
     // unsigned int *avg = (*pixFunc)(pixel, max, width, data);
     // printf("RET2: (%d,%d,%d) \n", avg[0], avg[1], avg[2]);
     // register int i asm("xmm2");
@@ -341,10 +342,10 @@ void *SEND_DATA(void *arguments)
 {
 
     struct arg_struct *args = arguments;
-    if (args->current == 1 || args->current == 2)
-    {
-        return NULL;
-    }
+    // if (args->current == 1 || args->current == 2)
+    // {
+    //     return NULL;
+    // }
     int width = args->image->width * 8;
     int height = args->image->height * 8 / args->allParts;
     ImageInt *image = args->image;
@@ -428,16 +429,28 @@ int main(int argc, char *argv[])
 
     // allocate image
     ImageInt *target = malloc(sizeof(ImageInt));
+
     ImageInt *tmpTarget = malloc(sizeof(ImageInt));
 
     copy_image(current_image, target);
     copy_image(current_image, tmpTarget);
 
+    double startTime = (float)clock() / CLOCKS_PER_SEC;
     // cpp_function(tmpTarget, target, 5);
-    handleThreads(1, tmpTarget, target);
-    // handleThreads(2, tmpTarget, target);
+    double endTime = (float)clock() / CLOCKS_PER_SEC;
+    printf("CPP elapsed: %f\n", endTime - startTime);
 
-    printf("WORKS \n");
+    // startTime = (float)clock() / CLOCKS_PER_SEC;
+    // handleThreads(1, tmpTarget, target);
+    // endTime = (float)clock() / CLOCKS_PER_SEC;
+    // printf("ASM elapsed: %f\n", endTime - startTime);
+
+    startTime = (float)clock() / CLOCKS_PER_SEC;
+    handleThreads(1, tmpTarget, target);
+    endTime = (float)clock() / CLOCKS_PER_SEC;
+    printf("ASM 4 elapsed: %f\n", endTime - startTime);
+
+    printf("DONE\n");
     write_pixel_to_file(target);
 
     if (!target)

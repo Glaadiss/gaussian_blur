@@ -81,8 +81,6 @@ extern void box_blur_h(Image *source, Image *target, int w, int h, int radius)
             addToP(avg, pixel);
         }
 
-
-
         for (int j = 0; j < w; j++)
         {
             unsigned int *pixel = source->data[i][ri % w];
@@ -91,8 +89,6 @@ extern void box_blur_h(Image *source, Image *target, int w, int h, int radius)
             {
                 ri++;
                 addTo(avg, sub(pixel, left_pixel));
-
-
             }
             else if (j < w - radius)
             {
@@ -125,7 +121,7 @@ extern Image *gaussian_blur(Image *source, Image *target, double radius)
 {
     int width = source->width;
     int height = source->height;
-    radius = 5;
+    radius = 10;
 
     box_blur_h(source, target, width, height, radius);
 
