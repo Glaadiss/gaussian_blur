@@ -1,196 +1,182 @@
-;r15 data to save in
+;rdi data to save in
 ;RSI heigh
 ;RDX width
 ;Rcx new data
 
 
-; extern void box_blur_h(Image *source, Image *target, int w, int h, int radius)
-; {
-;     Avg *avg = malloc(sizeof(Avg));
-;     double iarr = (double)1 / (radius + radius + 1); //
-;     for (int i = 0; i < h; i++)
-;     {
-;         int li = 0;
-;         int ri = radius;
-;         Pixel left_pixel = source->data[i][0];
-;         Pixel right_pixel = source->data[i][w - 1];
-;         init(avg, &left_pixel);
-;         mulTo(avg, radius + 1);
-;         for (int j = 0; j < radius; j++)
-;         {
-;             Pixel pixel = source->data[i][j];
-;             addToP(avg, &pixel);
-;         }
-;         for (int j = 0; j < w; j++)
-;         {
-;             Pixel pixel = source->data[i][ri % w];
-;             Pixel second_pixle = source->data[i][li % w];
-;             if (j <= radius)
-;             {
-;                 ri++;
-;                 addTo(avg, sub(&pixel, &left_pixel));
-;             }
-;             else if (j < w - radius)
-;             {
-;                 ri++;
-;                 li++;
-;                 addTo(avg, sub(&pixel, &second_pixle));
-;             }
-;             else
-;             {
-;                 li++;
-;                 addTo(avg, sub(&right_pixel, &pixel));
-;             }
-
-;             Pixel result = {avg->r * iarr, avg->g * iarr, avg->b * iarr};
-;             target->data[i][j] = result;
-;         }
-;     }
-; }
-
-
-
-
 section .text
 
 global _sumuj
-
-
 segment .text
 default rel ; enable rip-relative addressing
 
 _sumuj:
 	; init zeros
 	xor r8, r8 ; zerowanie r8 - i
+	heightLoop:
+	call arrayZero
+	movdqa xmm0, [array]
 
-	loopInColumn:  
-	xor r9, r9 ; zerowanie r9 - j
+
 
 	call getFirstAndLastPix ; xmm0 = left first Pix, xmm1 = right first Pix
 
-
-	ret
-	movdqa xmm0, [rax] ; pierwszy pixel wiersza
-	movdqa [rax], xmm0
-	
-
-
-
-	
-	call arrayOne
-	; movdqa xmm0, [array]
-	paddq xmm0, xmm0
-	paddq xmm0, xmm0
-	movdqa [rax], xmm0
-
-
-	movdqa xmm3, xmm0 ; mov left first pix to xmm3 (avg variable)
+	movdqa xmm0, xmm1 ; mov left first pix to xmm0 (avg variable)
 	call arrayBlur	; initialize array with "blur"
 	movdqa xmm4, [array] ; blur value to each cell (radius variable)
 	call arrayOne ; initalize array with "one"
 	paddq xmm4, [array] ; add one to each cell (radius variable)
-	pmuldq xmm3, xmm4 ; multiple avg by (blur + 1) and save in avg
-	
+	pmullw xmm0, xmm4 ; multiple avg by (blur + 1) and save in avg
 
 
+	;----------------first looop -----------------;
 	mov rax, [rdi + r8 ] ; point to first pixel in row
 	xor r10, r10 ; 0 to r10
-	prepareAvgLoop:
-		mov r11, [rax + r10] ; next pixel in row #1
-		mov [rax], r11 ; next pixel in row #2
-		paddq xmm3, [rax] ; add pixel values to avg values
-	
-	add r10, 3	; next pixel 
-	cmp r10, blur
-	jl prepareAvgLoop
+
+	avgLoop:
+
+		mov r13, [rax + r10] ; next pixel in row #
+		movdqa xmm2, [r13]
+		paddq xmm0, xmm2	
+		add r10, next	; next pixel 
+		cmp r10, blur*8
+		jl avgLoop
+
+	;----------------first looop -----------------;
 
 
-
-
-	; paddq xmm4, [ones]
-
-	;---------------------TEST-------
-	; mov byte[blurs], blur
-	; mov byte[blurs + 1], blur
-	; mov byte[blurs + 2], blur
-	; addpd xmm4, [blurs]
-	; movdqa [rax], xmm4
-	; ret
-	; mov rax, [ones]
-	; paddq xmm3, oword[blurs]
-
-	
-	;--------------------------------
-
-	; movdqa [rax], xmm1 
-
-	;paddq 
-	;movdqa
-
-	loopInRow:
-	;------------------------------------------------------------------------------------
-	; xor r14, r14;
-	; loopInBox:
-
-	; mov [r16], []
-	; mov [r10], [r14]
-
-	; inc r14
-	; cmp r14, blur
-
-
-
-	; jle loopInBox
-	;------------------------------------------------------------------------------------
-
-
-	mov byte [rax + r9], digit ;  r
-	mov byte [rax + r9 + 1], digit ; g
-	mov byte [rax + r9 + 2], digit ; b
-
-
-
-	add r9, 3 ;nastepny pixel 
-	cmp r9, rdx
-	jl loopInRow
+	;----------------second looop -----------------;
+	mov rax, [rdi + r8 ] ; point to first pixel in row
+	xor r10, r10 ; loop index
+	xor r14, r14 ; li
+	mov r15, blur*8; ri 
+	mainLoop:
+		mov r13, [rax + r15]	
+		movdqa xmm3, [r13] ; first_pixel
 		
-		add r8, next ; nastepny wiersz +8
-		cmp r8, rsi
-		jl loopInColumn
-	ret		            ; koniec funkcji
+		mov r13, [rax + r14]
+		movdqa xmm4, [r13] ; second_pixel
+		; movdqa xmm4, [array]
+		
+		;-------- jumps conditions --------
+		cmp r10, blur*8
+		jle lessThanRadius
+		mov r11, rdx
+		sub r11, blur*8
 
+		cmp r10, r11
+		jl lessThanWidthMinusRadius
+		jmp lessThanWidth
+		;-------- jumps conditions --------
+
+		lessThanRadius:
+		add r15, next ; increment ri
+		movdqa xmm5, xmm3
+		psubq xmm5, xmm1
+		paddq xmm0, xmm5
+		jmp mainComp
+
+		lessThanWidthMinusRadius:
+		
+		add r14, next ; increment li
+		add r15, next ; increment ri
+		movdqa xmm5, xmm3
+		psubd xmm5, xmm4
+		paddd xmm0, xmm5
+		cmp r10, 2000
+		jg end			
+		jmp mainComp
+
+		lessThanWidth:
+		add r14, next ; increment li
+		movdqa xmm5, xmm2
+		psubq xmm5, xmm3
+		paddq xmm0, xmm5
+;                 addTo(avg, sub(&right_pixel, &pixel));
+
+		mainComp:
+		
+
+		; movdqa xmm6, xmm0		
+		call arrayFives
+		; vdivpd xmm6, [array]
+		movdqa [r12], xmm0
+		; movdqa [r12], xmm6
+
+		; mov ebp, eax
+		; mov r13, [eax]
+		mov rax, [rcx + r8]
+		mov r9, [rax + r10]
+
+		mov r11, rdx
+
+		mov eax, [r12]
+		mov edx, 0
+		mov r13, 11
+		div r13 		
+		mov dword[r9], eax
+
+		mov eax, [r12+4]
+		mov edx, 0
+		mov r13, 11
+		div r13 		
+		mov dword[r9+4], eax
+
+		mov eax, [r12+8]
+		mov edx, 0
+		mov r13, 11
+		div r13 
+		mov dword[r9+8], eax
+
+		mov rdx, r11		
+
+		mov rax, [rdi + r8]
+
+		add r10, next
+		cmp r10, rdx
+		jl mainLoop
+
+		
+		end: 
+		add r8, next
+		cmp r8, rsi
+		jl heightLoop
+		movdqa [r12], xmm0
+		mov rax, r12
+		ret
 ;----------------------------------------------------------------------------------------------
 getFirstAndLastPix:
 
 	mov rax, [rdi + r8] ; n'ty wiersz
-	movdqa xmm0, [rax] ; pierwszy pixel wiersza
-	mov r11, [rax + rdx - 12] ; ostatni pixel wiersza #1 !!!!!!!!!!!!!!!!!!!
-	; movdqa xmm1, [r11]
-	; movdqa [r12], xmm1
-	; mov [rax], r10 ; ostatni pixel wiersza #2
-	; mov [r11], r10
-	; movdqa xmm1, [r11] ; ostatni pixel wiersza #3
-	; movdqa [r11], xmm0
-	mov rax, r11
-	; mov rax, r11
+	mov r12, [rax]
+	movdqa xmm1, [r12] ; pierwszy pixel wiersza
+	mov r9, rdx
+	mov r12, [rax + r9 - 8]
+	movdqa xmm2, [r12]
 	ret
 
 arrayZero:
 	mov dword[array], zero
-	mov dword[array +1*4], zero
-	mov dword[array +2*4], zero
+	mov dword[array +4], zero
+	mov dword[array +8], zero
 	ret
 
 arrayBlur:
 	mov dword[array], blur
-	mov dword[array +1*4], blur
-	mov dword[array +2*4], blur
+	mov dword[array +4], blur
+	mov dword[array +8], blur
 	ret
 
 arrayOne:
 	mov dword[array], one
-	mov dword[array +1*4], one
-	mov dword[array +2*4], one
+	mov dword[array +4], one
+	mov dword[array +8], one
+	ret
+
+arrayFives:
+	mov dword[array], five
+	mov dword[array +4], five
+	mov dword[array +8], five
 	ret
 
 section .data
@@ -201,10 +187,14 @@ section .data
 	zero equ 0
 	three equ 3
 	one equ 1
-	five equ 5
+	five equ 11
 	radius equ 5
-	blur equ 1
-	box  equ 9
+	blur equ 5
+	blurIndex dw 0
+	iarr dd 0.2
+	iarArr dd 0.2, 0.2, 0.2
+	iar dw 2
+	box equ 9
 	ones dw 1, 1, 1
 
 ; section .bss

@@ -9,7 +9,6 @@
 
 typedef struct pixel_t
 {
-    unsidgned char *data;
     unsigned char r;
     unsigned char g;
     unsigned char b;
@@ -33,7 +32,7 @@ typedef struct image_t
 {
     uint32_t width;
     uint32_t height;
-    Avg **data;
+    unsigned int ***data;
 } __attribute__((__packed__)) ImageInt;
 
 #define min(a, b) (((a) < (b)) ? (a) : (b))
@@ -47,8 +46,8 @@ void write_pixel_to_file(ImageInt *const source)
     {
         for (int w = 0; w < source->width; ++w)
         {
-            Avg current_pixel = source->data[h][w];
-            fprintf(file, "(%d,%d,%d)", (int)current_pixel.r, (int)current_pixel.g, (int)current_pixel.b);
+            unsigned int *current_pixel = source->data[h][w];
+            fprintf(file, "(%d,%d,%d)", (int)current_pixel[0], (int)current_pixel[1], (int)current_pixel[2]);
         }
         fprintf(file, "\n");
     }
@@ -80,18 +79,22 @@ void copy_image(Image *source, ImageInt *target)
     int height = source->height;
     target->width = width;
     target->height = height;
-    target->data = calloc(height, sizeof(Avg *));
+    target->data = calloc(height, sizeof(int *));
     for (int row = 0; row < height; row++)
     {
-        target->data[row] = calloc(width, sizeof(Avg));
+        target->data[row] = calloc(width, sizeof(int *));
     }
     for (int row = 0; row < source->height; row++)
     {
         for (int coll = 0; coll < source->width; coll++)
         {
-            target->data[row][coll].r = source->data[row][coll].r;
-            target->data[row][coll].g = source->data[row][coll].g;
-            target->data[row][coll].b = source->data[row][coll].b;
+            target->data[row][coll] = calloc(3, sizeof(int));
+        }
+        for (int coll = 0; coll < source->width; coll++)
+        {
+            target->data[row][coll][0] = source->data[row][coll].r;
+            target->data[row][coll][1] = source->data[row][coll].g;
+            target->data[row][coll][2] = source->data[row][coll].b;
         }
     }
 }
@@ -111,9 +114,9 @@ void copy_for_bmp(ImageInt *source, Image *target)
     {
         for (int coll = 0; coll < source->width; coll++)
         {
-            target->data[row][coll].r = source->data[row][coll].r;
-            target->data[row][coll].g = source->data[row][coll].g;
-            target->data[row][coll].b = source->data[row][coll].b;
+            target->data[row][coll].r = source->data[row][coll][0];
+            target->data[row][coll].g = source->data[row][coll][1];
+            target->data[row][coll].b = source->data[row][coll][2];
         }
     }
 }
@@ -275,7 +278,7 @@ write_error_code_t to_bmp(FILE *out, ImageInt *const imgI)
 // Pixel **(*funkcja)(Image *, int);
 Image *(*fun1)(ImageInt *, ImageInt *, int);
 // Avg *(*pixFunc)(Avg **, int, int, Avg **);
-int (*pixFunc)(Avg **, int, int, Avg **);
+unsigned int *(*pixFunc)(unsigned int **, int, int, unsigned int **);
 
 void *Biblioteka;
 const char *error;
@@ -297,19 +300,19 @@ void *cpp_function(ImageInt *target, ImageInt *current_image, int b)
     return NULL;
 }
 
-void asm_function(Avg **pixel, int max, int width, Avg **data)
+void asm_function(unsigned int **pixel, int max, int width, unsigned int **data)
 {
     Biblioteka = dlopen("../build/libDLL_ASM.dylib", RTLD_LAZY);
     // printf("PIXE %d \n", pixel[0]->r);
     error = dlerror();
     *(void **)(&pixFunc) = dlsym(Biblioteka, "sumuj");
-    // (*pixFunc)(pixel, max, width, data);
-    Avg avg2 = pixel[0][0];
+    (*pixFunc)(pixel, max, width, data);
+    // unsigned int *avg2 = pixel[0][0];
     // printf("left: %lu \n right%lu\n DOWN:%lu\n", &pixel[0][0], &pixel[0][1], &pixel[1][0]);
-    printf("RET: (%d,%d,%d) \n", avg2.r, avg2.g, avg2.b);
-    printf("RET2: %lu\n", (*pixFunc)(pixel, max, width, data));
-    // Avg *avg = (*pixFunc)(pixel, max, width, data);
-    // printf("RET2: (%d,%d,%d) \n", avg->r, avg->g, avg->b);
+    // printf("RET: (%d,%d,%d) \n", avg2[0], avg2[1], avg2[2]);
+    printf("RET2: %d\n", (*pixFunc)(pixel, max, width, data));
+    // unsigned int *avg = (*pixFunc)(pixel, max, width, data);
+    // printf("RET2: (%d,%d,%d) \n", avg[0], avg[1], avg[2]);
     // register int i asm("xmm2");
     // printf("register: %d \n", i);
     // Pixel *pix = (*pixFunc)(pixel, max, width, data);
@@ -323,13 +326,13 @@ void asm_function(Avg **pixel, int max, int width, Avg **data)
 
 struct arg_struct
 {
-    Avg **startFrom;
+    unsigned ***startFrom;
     int current;
     int allParts;
     ImageInt *image;
     ImageInt *currentImage;
 };
-Avg **getRow(ImageInt *image, int current, int allParts)
+unsigned int **getRow(ImageInt *image, int current, int allParts)
 {
     return &image->data[current * image->height / allParts];
 }
@@ -338,16 +341,16 @@ void *SEND_DATA(void *arguments)
 {
 
     struct arg_struct *args = arguments;
-    if (args->current == 2)
+    if (args->current == 1 || args->current == 2)
     {
         return NULL;
     }
-    int width = args->image->width * 12;
+    int width = args->image->width * 8;
     int height = args->image->height * 8 / args->allParts;
     ImageInt *image = args->image;
     ImageInt *current = args->currentImage;
-    Avg **imageRow = getRow(image, args->current, args->allParts);
-    Avg **currentRow = getRow(current, args->current, args->allParts);
+    unsigned int **imageRow = getRow(image, args->current, args->allParts);
+    unsigned int **currentRow = getRow(current, args->current, args->allParts);
 
     asm_function(imageRow, height, width, currentRow);
 
@@ -430,8 +433,9 @@ int main(int argc, char *argv[])
     copy_image(current_image, target);
     copy_image(current_image, tmpTarget);
 
-    cpp_function(tmpTarget, target, 5);
-    handleThreads(1, target, tmpTarget);
+    // cpp_function(tmpTarget, target, 5);
+    handleThreads(1, tmpTarget, target);
+    // handleThreads(2, tmpTarget, target);
 
     printf("WORKS \n");
     write_pixel_to_file(target);
