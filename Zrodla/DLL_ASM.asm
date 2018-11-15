@@ -1,10 +1,11 @@
-default rel 						; enable rip-relative addressing
+
 ;rdi data to save in
 ;RSI heigh
 ;RDX width
 ;Rcx new data
 ;r8 radius
 
+default rel 						; enable rip-relative addressing
 section .bss
 blurI: resb 4
 
@@ -35,7 +36,7 @@ _gaussian_blur:
 	; mov blur*8, rax
 
 	; init zeros
-	xor r8, r8 						; zerowanie r8 - i
+	xor r8, r8 						; zero to r8
 	heightLoop:
 
 	call arrayZero
@@ -74,85 +75,79 @@ _gaussian_blur:
 		movdqa xmm4, [r13] 			; second_pixel
 		
 		;-------- jumps conditions --------
-		cmp r10, blur*8
-		jle lessThanRadius
-		mov r11, rdx
-		sub r11, blur*8
-		sub r11, 8
-		cmp r10, r11
-		jl lessThanWidthMinusRadius
-		jmp lessThanWidth
+		cmp r10, blur*8				; 
+		jle lessThanRadius			; if widthIndex < blurValue
+		mov r11, rdx				; tmp value for width
+		sub r11, blur*8				; tmp = width - blurValue
+		sub r11, 8					; tmp -= 8
+		cmp r10, r11				;	
+		jl lessThanWidthMinusRadius ; if widthIndex < width - blurvalue
+		jmp lessThanWidth			; if widthIndex < width
 		;-------- jumps conditions --------
 
 		lessThanRadius:
 		add r15, next 				; increment ri
-		movdqa xmm5, xmm3
-		psubq xmm5, xmm1
-		paddq xmm0, xmm5
+		movdqa xmm5, xmm3			; temp vector - from first_pixel
+		psubq xmm5, xmm1			; tmp = fist_pixel - left_first_pixel
+		paddq xmm0, xmm5			; add tmp to avg
 		jmp mainComp
 
 		lessThanWidthMinusRadius:
 		
 		add r14, next 				; increment li
 		add r15, next 				; increment ri
-		movdqa xmm5, xmm3
-		psubd xmm5, xmm4
-		paddd xmm0, xmm5
+		movdqa xmm5, xmm3			; temp vector - from first_pixel
+		psubd xmm5, xmm4			; tmp = first_pixel - second_pixel 
+		paddd xmm0, xmm5			; add tmp to avg
 		jmp mainComp
 
 		lessThanWidth:
 		add r14, next 				; increment li
-		; jmp mainComp
-		movdqa xmm5, xmm2
-		psubq xmm5, xmm4
-		paddq xmm0, xmm5			; addTo(avg, sub(&right_pixel, &pixel));
+		movdqa xmm5, xmm2			; temp vector - from right_pixel
+		psubq xmm5, xmm4			; tmp = right pixel - second_pixel
+		paddq xmm0, xmm5			; add tmp to avg
 
 		mainComp:	
-		call arrayFives
-		movdqa [r12], xmm0
-		mov rax, [rcx + r8]
-		mov r9, [rax + r10]
+		movdqa [r12], xmm0			; move avg vector to r12
+		mov rax, [rcx + r8]			; move r8 row to rax (data to save in)
+		mov r9, [rax + r10]			; mow r10 col from r8 row to r9 (data to save in)
 
-		mov r11, rdx
+		mov r11, rdx				; temporary variable for rdx - image width
+		mov eax, [r12]				; move  r from pixel to eax
+		mov edx, 0					; move 0 to edx to work only on integers
+		mov r13, five				; move blur value to r13
+		div r13 					; r / blur value
+		mov dword[r9], eax			; save new r value
 
-		mov eax, [r12]
-		mov edx, 0
-		mov r13, five
-		div r13 		
-		mov dword[r9], eax
+		mov eax, [r12+4]			; move g from pixel to eax
+		mov edx, 0					; move 0 to edx to work only on integers
+		mov r13, five				; move blur value to r13
+		div r13 					; g / blur value
+		mov dword[r9+4], eax		; save new g value
 
-		mov eax, [r12+4]
-		mov edx, 0
-		mov r13, five
-		div r13 		
-		mov dword[r9+4], eax
+		mov eax, [r12+8]			; move b from pixel to eax
+		mov edx, 0					; move 0 to edx to work only on integers
+		mov r13, five				; move blur value to r13
+		div r13 					; b / blur value
+		mov dword[r9+8], eax		; save new b value
 
-		mov eax, [r12+8]
-		mov edx, 0
-		mov r13, five
-		div r13 
-		mov dword[r9+8], eax
-
-		mov rdx, r11		
-
-		mov rax, [rdi + r8]
-
-		add r10, next
-		cmp r10, rdx
+		mov rdx, r11				; restore width value to rdx
+		mov rax, [rdi + r8]			; set rax to point on the source data
+		add r10, next				; iterate width index
+		cmp r10, rdx				; compare widths 
 		jl mainLoop
 
-		
 		end: 
-		add r8, next
-		cmp r8, rsi
+		add r8, next				; iterate height index
+		cmp r8, rsi					; compare heights
 		jl heightLoop
-		movdqa [r12], xmm0
-		mov rax, r12
-		ret
+		movdqa [r12], xmm0			; ONLY FOR TESTS
+		mov rax, r12				; ONLY FOR TESTS
+		ret							; ONLY FOR TESTS
 ;----------------------------------------------------------------------------------------------
 getFirstAndLastPix:
 
-	mov rax, [rdi + r8] 			; n'ty wiersz
+	mov rax, [rdi + r8] 			; n row
 	mov r12, [rax]
 	movdqa xmm1, [r12] 				; left_pix
 	mov r12, [rax + rdx - 8]

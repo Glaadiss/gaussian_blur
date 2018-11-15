@@ -446,7 +446,7 @@ int main(int argc, char *argv[])
     // printf("ASM elapsed: %f\n", endTime - startTime);
 
     startTime = (float)clock() / CLOCKS_PER_SEC;
-    handleThreads(1, tmpTarget, target);
+    handleThreads(3, tmpTarget, target);
     endTime = (float)clock() / CLOCKS_PER_SEC;
     printf("ASM 4 elapsed: %f\n", endTime - startTime);
 
