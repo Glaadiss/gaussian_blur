@@ -7,6 +7,7 @@
 #include <unistd.h>
 #include <pthread.h>
 #include <time.h>
+#include <string.h>
 
 typedef struct pixel_t
 {
@@ -276,17 +277,14 @@ write_error_code_t to_bmp(FILE *out, ImageInt *const imgI)
     return WRITE_OK;
 }
 
-// Pixel **(*funkcja)(Image *, int);
-Image *(*fun1)(ImageInt *, ImageInt *, int);
-// Avg *(*pixFunc)(Avg **, int, int, Avg **);
+Image *(*fun1)(ImageInt *, ImageInt *, int, int, int);
 unsigned int *(*pixFunc)(unsigned int **, int, int, unsigned int **, int radius);
 
 void *Biblioteka;
 const char *error;
 
-void *cpp_function(ImageInt *target, ImageInt *current_image, int b)
+void *cpp_function(ImageInt *target, ImageInt *current_image, int b, int start, int end)
 {
-    // printf("371 %d \n\n", 10);
 
     Biblioteka = dlopen("../build/blur.dylib", RTLD_LAZY);
     error = dlerror();
@@ -296,32 +294,17 @@ void *cpp_function(ImageInt *target, ImageInt *current_image, int b)
         exit(EXIT_FAILURE);
     }
     *(void **)(&fun1) = dlsym(Biblioteka, "gaussian_blur");
-    Image *wynik = (*fun1)(target, current_image, b);
+    Image *wynik = (*fun1)(target, current_image, b, start, end);
     dlclose(Biblioteka);
     return NULL;
 }
 
-void asm_function(unsigned int **pixel, int max, int width, unsigned int **data)
+void asm_function(unsigned int **pixel, int max, int width, unsigned int **data, int radius)
 {
     Biblioteka = dlopen("../build/libDLL_ASM.dylib", RTLD_LAZY);
-    // printf("PIXE %d \n", pixel[0]->r);
     error = dlerror();
     *(void **)(&pixFunc) = dlsym(Biblioteka, "gaussian_blur");
-    // (*pixFunc)(pixel, max, width, data);
-    // unsigned int *avg2 = pixel[0][0];
-    // printf("left: %lu \n right%lu\n DOWN:%lu\n", &pixel[0][0], &pixel[0][1], &pixel[1][0]);
-    // printf("RET: (%d,%d,%d) \n", avg2[0], avg2[1], avg2[2]);
-    printf("RET2: %d\n", (*pixFunc)(pixel, max, width, data, 5));
-    // unsigned int *avg = (*pixFunc)(pixel, max, width, data);
-    // printf("RET2: (%d,%d,%d) \n", avg[0], avg[1], avg[2]);
-    // register int i asm("xmm2");
-    // printf("register: %d \n", i);
-    // Pixel *pix = (*pixFunc)(pixel, max, width, data);
-    // Pixel *p = pix;
-    // printf("PIXE works \n");
-    // printf("(%d,%d,%d)\n", p->r, p->g, p->b);
-    // printf("r: %d\n", pixe);
-    // printf("PIXE %d %d %d \n", pixe[0]->r, pixe[0]->g, pixe[0]->b);
+    (*pixFunc)(pixel, max, width, data, radius);
     dlclose(Biblioteka);
 }
 
@@ -332,6 +315,8 @@ struct arg_struct
     int allParts;
     ImageInt *image;
     ImageInt *currentImage;
+    int mode;
+    int radius;
 };
 unsigned int **getRow(ImageInt *image, int current, int allParts)
 {
@@ -342,7 +327,7 @@ void *SEND_DATA(void *arguments)
 {
 
     struct arg_struct *args = arguments;
-    // if (args->current == 1 || args->current == 2)
+    // if (args->current == 2)
     // {
     //     return NULL;
     // }
@@ -352,13 +337,20 @@ void *SEND_DATA(void *arguments)
     ImageInt *current = args->currentImage;
     unsigned int **imageRow = getRow(image, args->current, args->allParts);
     unsigned int **currentRow = getRow(current, args->current, args->allParts);
-
-    asm_function(imageRow, height, width, currentRow);
+    int max = image->height / args->allParts;
+    if (args->mode == 1)
+    {
+        cpp_function(image, current, args->radius, args->current * max, args->current * max + max);
+    }
+    if (args->mode == 2)
+    {
+        asm_function(imageRow, height, width, currentRow, args->radius);
+    }
 
     return NULL;
 }
 
-void handleThreads(int n, ImageInt *data, ImageInt *currentImage)
+void handleThreads(int n, ImageInt *data, ImageInt *currentImage, int mode, int radius)
 {
     int rowsNumber = data->height / n;
     int thread_cmp_count = n;
@@ -374,6 +366,8 @@ void handleThreads(int n, ImageInt *data, ImageInt *currentImage)
         arg.allParts = n;
         arg.image = data;
         arg.currentImage = currentImage;
+        arg.mode = mode;
+        arg.radius = radius;
         args[i] = arg;
         pthread_create(&cmp_thread[i], NULL, &SEND_DATA, (void *)&args[i]);
     }
@@ -387,14 +381,31 @@ void handleThreads(int n, ImageInt *data, ImageInt *currentImage)
     free(cmp_thread);
 }
 
+int chooseMode(char *arg)
+{
+    if (strcmp("c", arg) == 0)
+    {
+        return 1;
+    }
+    if (strcmp("asm", arg) == 0)
+    {
+        return 2;
+    }
+    return 3;
+}
+
 int main(int argc, char *argv[])
 {
-    int num = strtol(argv[1], NULL, 10);
+    // int mode = 2;
+    int mode = chooseMode(argv[1]);
     int numofcpus = (int)sysconf(_SC_NPROCESSORS_ONLN);
+    int num = strtol(argv[2], NULL, 10);
+    // int radius = strtol(argv[3], NULL, 10);
+    char *imgName = argv[3];
+    printf("Cores number: %d\n", argc);
+    int radius = 10;
 
-    printf("Cores number: %d\n", numofcpus);
-
-    FILE *file_in = fopen("big.bmp", "rb");
+    FILE *file_in = fopen(imgName, "rb");
     if (!file_in)
     {
         fprintf(stderr, "Can`t open file to read");
@@ -434,21 +445,24 @@ int main(int argc, char *argv[])
 
     copy_image(current_image, target);
     copy_image(current_image, tmpTarget);
-
-    double startTime = (float)clock() / CLOCKS_PER_SEC;
-    // cpp_function(tmpTarget, target, 5);
-    double endTime = (float)clock() / CLOCKS_PER_SEC;
-    printf("CPP elapsed: %f\n", endTime - startTime);
-
-    // startTime = (float)clock() / CLOCKS_PER_SEC;
-    // handleThreads(1, tmpTarget, target);
-    // endTime = (float)clock() / CLOCKS_PER_SEC;
-    // printf("ASM elapsed: %f\n", endTime - startTime);
-
-    startTime = (float)clock() / CLOCKS_PER_SEC;
-    handleThreads(3, tmpTarget, target);
-    endTime = (float)clock() / CLOCKS_PER_SEC;
-    printf("ASM 4 elapsed: %f\n", endTime - startTime);
+    if (mode == 1 || mode == 3)
+    {
+        double startTime = (float)clock() / CLOCKS_PER_SEC;
+        handleThreads(num, tmpTarget, target, 1, radius);
+        double endTime = (float)clock() / CLOCKS_PER_SEC;
+        unsigned int *a = target->data[177][200];
+        unsigned int *b = target->data[178][200];
+        printf("QWE  %d %d %d \n", a[0], a[1], a[2]);
+        printf("QWE  %d %d %d \n", b[0], b[1], b[2]);
+        printf("C -  elapsed: %f\n", endTime - startTime);
+    }
+    if (mode == 2 || mode == 3)
+    {
+        double startTime = (float)clock() / CLOCKS_PER_SEC;
+        handleThreads(num, tmpTarget, target, 2, radius);
+        double endTime = (float)clock() / CLOCKS_PER_SEC;
+        printf("ASM %d threads -  elapsed: %f\n", num, endTime - startTime);
+    }
 
     printf("DONE\n");
     write_pixel_to_file(target);
