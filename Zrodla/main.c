@@ -8,7 +8,28 @@
 #include <pthread.h>
 #include <time.h>
 #include <string.h>
+#include <sched.h>
 
+#include <cpuid.h>
+
+#define CPUID(INFO, LEAF, SUBLEAF) __cpuid_count(LEAF, SUBLEAF, INFO[0], INFO[1], INFO[2], INFO[3])
+
+#define GETCPU(CPU)                                     \
+    {                                                   \
+        uint32_t CPUInfo[4];                            \
+        CPUID(CPUInfo, 1, 0);                           \
+        /* CPUInfo[1] is EBX, bits 24-31 are APIC ID */ \
+        if ((CPUInfo[3] & (1 << 9)) == 0)               \
+        {                                               \
+            CPU = -1; /* no APIC on chip */             \
+        }                                               \
+        else                                            \
+        {                                               \
+            CPU = (unsigned)CPUInfo[1] >> 24;           \
+        }                                               \
+        if (CPU < 0)                                    \
+            CPU = 0;                                    \
+    }
 typedef struct pixel_t
 {
     unsigned char r;
@@ -325,22 +346,22 @@ unsigned int **getRow(ImageInt *image, int current, int allParts)
 
 void *SEND_DATA(void *arguments)
 {
-
+    int a;
+    GETCPU(a);
+    printf("CPU %d \n", a);
     struct arg_struct *args = arguments;
-    // if (args->current == 2)
-    // {
-    //     return NULL;
-    // }
     int width = args->image->width * 8;
-    int height = args->image->height * 8 / args->allParts;
+    int height = args->image->height / args->allParts;
+    height += (args->current > (height % args->allParts)) ? 1 : 0;
+    height *= 8;
     ImageInt *image = args->image;
     ImageInt *current = args->currentImage;
     unsigned int **imageRow = getRow(image, args->current, args->allParts);
     unsigned int **currentRow = getRow(current, args->current, args->allParts);
-    int max = image->height / args->allParts;
+    int max = image->height * args->current / args->allParts;
     if (args->mode == 1)
     {
-        cpp_function(image, current, args->radius, args->current * max, args->current * max + max);
+        cpp_function(image, current, args->radius, max - (args->current ? 1 : 0), args->image->height / args->allParts + max);
     }
     if (args->mode == 2)
     {
@@ -352,6 +373,8 @@ void *SEND_DATA(void *arguments)
 
 void handleThreads(int n, ImageInt *data, ImageInt *currentImage, int mode, int radius)
 {
+    n = n % data->height;
+
     int rowsNumber = data->height / n;
     int thread_cmp_count = n;
     int t, index, thread = 0;
@@ -400,10 +423,8 @@ int main(int argc, char *argv[])
     int mode = chooseMode(argv[1]);
     int numofcpus = (int)sysconf(_SC_NPROCESSORS_ONLN);
     int num = strtol(argv[2], NULL, 10);
-    // int radius = strtol(argv[3], NULL, 10);
+    int radius = strtol(argv[4], NULL, 10);
     char *imgName = argv[3];
-    printf("Cores number: %d\n", argc);
-    int radius = 10;
 
     FILE *file_in = fopen(imgName, "rb");
     if (!file_in)
@@ -452,8 +473,6 @@ int main(int argc, char *argv[])
         double endTime = (float)clock() / CLOCKS_PER_SEC;
         unsigned int *a = target->data[177][200];
         unsigned int *b = target->data[178][200];
-        printf("QWE  %d %d %d \n", a[0], a[1], a[2]);
-        printf("QWE  %d %d %d \n", b[0], b[1], b[2]);
         printf("C -  elapsed: %f\n", endTime - startTime);
     }
     if (mode == 2 || mode == 3)

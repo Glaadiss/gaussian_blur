@@ -5,3 +5,22 @@ CHANGELOG
 Przykładowa funckja w asm dodająca dwie liczby oraz to samo w cpp.
 Tworzenie bibliotek dynamicznych z cpp i asm - wywołanie ich w main
 
+
+0.2 - 23.10.2018
+
+Algorytm Rozmycia w C
+
+0.3 - 30.10.2018
+
+Biblioteka w assemblerze ma dostęp do pamięci która jest zapisywana do obrazka
+
+0.4 - 7.11.2018 
+
+Główna funkcjonalność gotowa w assemblerze
+
+0.5 - 14.11.2018 
+
+Obie bibilioteki działają na wątkach
+
+0.6 - 20.11.2018 Poprawa błędów z wyciekami pamieci oraz dodanie komunikacji przez terminal
+

@@ -4,4 +4,4 @@ gcc -g -fPIC -Wall -Werror -Wextra -pedantic blur.c -shared -o ../build/blur.dyl
 gcc -g -ldl -o ../build/prog main.c -lpthread -O3
 export LD_LIBRARY_PATH="$LD_LIBRARY_PATH: `pwd`"
 
-../build/prog $1 $2 $3
+../build/prog $1 $2 $3 $4
