@@ -11,11 +11,12 @@ default rel 						; enable rip-relative addressing
 
 
 section .data
-	blurI dd 0, 0, 0, 0				; blur level
 	blurArr dd 0, 0, 0, 0			; blur level buffer
 	ones dd 1, 1, 1, 1				; array with ones
+	blurI dd 0, 0, 0, 0				; blur level
 	zeros dd 0, 0, 0, 0				; array with zeros
 	blurBuff dd 0, 0 ,0 ,0			; increased array with blur level
+
 	next equ 8						; for moving between pointers
 	zero equ 0						;	 
 	one equ 1						;
@@ -37,19 +38,24 @@ _gaussian_blur:
 	imul eax, 8						; multiple eax x8
 	mov dword[blurI], eax			; fill blurI with x8 radius
 
-	xor r8, r8 						; zero to r8
+	xor r8, r8						; zero to r8
 	heightLoop:
 	
 	movdqa xmm0, [zeros]
-	call getFirstAndLastPix 		; xmm0 = left first Pix, xmm1 = right first Pix
+	; 
+	mov rax, [rdi + r8] 			; n row
+	mov r12, [rax]
+	movdqa xmm1, [r12] 				; left_pix
+	mov r12, [rax + rdx - 8]
+	movdqa xmm2, [r12]	
 	movdqa xmm0, xmm1 				; mov left first pix to xmm0 (avg variable)
 	movdqa xmm4, [blurArr] 			; blur value to each cell (radius variable)
-	paddq xmm4, [ones] 			; add one to each cell (radius variable)
+	paddq xmm4, [ones] 				; add one to each cell (radius variable)
 	pmullw xmm0, xmm4 				; multiple avg by (blur + 1) and save in avg
-
+	
 	;----------------first looop -----------------;
 	mov rax, [rdi + r8 ] 			; point to first pixel in row
-	xor r10, r10 					; 0 to r10
+	xor r10, r10					; 0 to r10
 	avgLoop:
 		mov r13, [rax + r10] 		; next pixel in row #
 		movdqa xmm2, [r13]			; mov pixel to first right pixel
@@ -59,15 +65,16 @@ _gaussian_blur:
 		jl avgLoop
 	;----------------first looop -----------------;
 
-	;----------------second looop -----------------;
+	;----------------second looop -----------------;	
 	mov rax, [rdi + r8 ] 			; point to first pixel in row
-	xor r10, r10 					; loop index
-	mov r14, 0						; li
-    mov r15, [blurI]				; ri 
+	mov r10, 0 						; loop index
+    mov r15, [blurI]				; ri
+	mov rbx, 0	
 	mainLoop:
 		mov r13, [rax + r15]	
 		movdqa xmm3, [r13] 			; first_pixel	
-		mov r13, [rax + r14]
+		add rax, rbx
+		mov r13, [rax]
 		movdqa xmm4, [r13] 			; second_pixel
 		
 		;-------- jumps conditions --------
@@ -85,12 +92,12 @@ _gaussian_blur:
 		add r15, next 				; increment ri
 		movdqa xmm5, xmm3			; temp vector - from first_pixel
 		psubq xmm5, xmm1			; tmp = fist_pixel - left_first_pixel
-		paddq xmm0, xmm5			; add tmp to avg
+		paddq xmm0, xmm5			; add tmp to avg		
 		jmp mainComp
 
+
 		lessThanWidthMinusRadius:
-		
-		add r14, next 				; increment li
+		add rbx, next				; increment li												 				
 		add r15, next 				; increment ri
 		movdqa xmm5, xmm3			; temp vector - from first_pixel
 		psubd xmm5, xmm4			; tmp = first_pixel - second_pixel 
@@ -98,11 +105,11 @@ _gaussian_blur:
 		jmp mainComp
 
 		lessThanWidth:
-		add r14, next 				; increment li
+		add rbx, next					
 		movdqa xmm5, xmm2			; temp vector - from right_pixel
 		psubq xmm5, xmm4			; tmp = right pixel - second_pixel
 		paddq xmm0, xmm5			; add tmp to avg
-
+		
 		mainComp:	
 		movdqa [r12], xmm0			; move avg vector to r12
 		mov rax, [rcx + r8]			; move r8 row to rax (data to save in)
@@ -140,15 +147,5 @@ _gaussian_blur:
 		ret
 
 
-getFirstAndLastPix:
-	mov rax, [rdi + r8] 			; n row
-	mov r12, [rax]
-	movdqa xmm1, [r12] 				; left_pix
-	mov r12, [rax + rdx - 8]
-	movdqa xmm2, [r12]				; right_pix
-	ret
-
-
-
-
-
+		finish: 
+		ret

@@ -341,6 +341,7 @@ struct arg_struct
 };
 unsigned int **getRow(ImageInt *image, int current, int allParts)
 {
+
     return &image->data[current * image->height / allParts];
 }
 
@@ -352,8 +353,10 @@ void *SEND_DATA(void *arguments)
     struct arg_struct *args = arguments;
     int width = args->image->width * 8;
     int height = args->image->height / args->allParts;
-    height += (args->current > (height % args->allParts)) ? 1 : 0;
+    height += (args->current > (height % args->allParts)) ? 1 : 1;
+    height -= (args->current == args->allParts - 1) ? 1 : 0;
     height *= 8;
+
     ImageInt *image = args->image;
     ImageInt *current = args->currentImage;
     unsigned int **imageRow = getRow(image, args->current, args->allParts);
@@ -419,12 +422,12 @@ int chooseMode(char *arg)
 
 int main(int argc, char *argv[])
 {
-    // int mode = 2;
     int mode = chooseMode(argv[1]);
     int numofcpus = (int)sysconf(_SC_NPROCESSORS_ONLN);
-    int num = strtol(argv[2], NULL, 10);
-    int radius = strtol(argv[4], NULL, 10);
+    int radius = strtol(argv[2], NULL, 10);
     char *imgName = argv[3];
+    int num = argc < 5 ? numofcpus : strtol(argv[4], NULL, 10);
+    num = num < 1 ? 1 : num;
 
     FILE *file_in = fopen(imgName, "rb");
     if (!file_in)
