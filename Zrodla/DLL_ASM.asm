@@ -145,7 +145,3 @@ _gaussian_blur:
 		cmp r8, rsi					; compare heights
 		jl heightLoop
 		ret
-
-
-		finish: 
-		ret

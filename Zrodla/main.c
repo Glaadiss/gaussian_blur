@@ -302,31 +302,19 @@ Image *(*fun1)(ImageInt *, ImageInt *, int, int, int);
 unsigned int *(*pixFunc)(unsigned int **, int, int, unsigned int **, int radius);
 
 void *Biblioteka;
+void *Biblioteka2;
 const char *error;
+const char *error2;
 
 void *cpp_function(ImageInt *target, ImageInt *current_image, int b, int start, int end)
 {
-
-    Biblioteka = dlopen("../build/blur.dylib", RTLD_LAZY);
-    error = dlerror();
-    if ((error = dlerror()) != NULL)
-    {
-        fprintf(stderr, "%s\n", error);
-        exit(EXIT_FAILURE);
-    }
-    *(void **)(&fun1) = dlsym(Biblioteka, "gaussian_blur");
     Image *wynik = (*fun1)(target, current_image, b, start, end);
-    dlclose(Biblioteka);
     return NULL;
 }
 
 void asm_function(unsigned int **pixel, int max, int width, unsigned int **data, int radius)
 {
-    Biblioteka = dlopen("../build/libDLL_ASM.dylib", RTLD_LAZY);
-    error = dlerror();
-    *(void **)(&pixFunc) = dlsym(Biblioteka, "gaussian_blur");
     (*pixFunc)(pixel, max, width, data, radius);
-    dlclose(Biblioteka);
 }
 
 struct arg_struct
@@ -347,16 +335,15 @@ unsigned int **getRow(ImageInt *image, int current, int allParts)
 
 void *SEND_DATA(void *arguments)
 {
-    int a;
-    GETCPU(a);
-    printf("CPU %d \n", a);
+    // int a;
+    // GETCPU(a);
+    // printf("CPU %d \n", a);
     struct arg_struct *args = arguments;
     int width = args->image->width * 8;
     int height = args->image->height / args->allParts;
     height += (args->current > (height % args->allParts)) ? 1 : 1;
     height -= (args->current == args->allParts - 1) ? 1 : 0;
     height *= 8;
-
     ImageInt *image = args->image;
     ImageInt *current = args->currentImage;
     unsigned int **imageRow = getRow(image, args->current, args->allParts);
@@ -407,6 +394,19 @@ void handleThreads(int n, ImageInt *data, ImageInt *currentImage, int mode, int 
     free(cmp_thread);
 }
 
+long long getMs()
+{
+    struct timeval tv;
+
+    gettimeofday(&tv, NULL);
+
+    long long millisecondsSinceEpoch =
+        (long long)(tv.tv_sec) * 1000 +
+        (long long)(tv.tv_usec) / 1000;
+
+    return millisecondsSinceEpoch;
+}
+
 int chooseMode(char *arg)
 {
     if (strcmp("c", arg) == 0)
@@ -422,6 +422,18 @@ int chooseMode(char *arg)
 
 int main(int argc, char *argv[])
 {
+    Biblioteka = dlopen("../build/blur.dylib", RTLD_LAZY);
+    error = dlerror();
+    Biblioteka2 = dlopen("../build/libDLL_ASM.dylib", RTLD_LAZY);
+    error2 = dlerror();
+    if ((error = dlerror()) != NULL)
+    {
+        fprintf(stderr, "%s\n", error);
+        exit(EXIT_FAILURE);
+    }
+    *(void **)(&fun1) = dlsym(Biblioteka, "gaussian_blur");
+    *(void **)(&pixFunc) = dlsym(Biblioteka2, "gaussian_blur");
+
     int mode = chooseMode(argv[1]);
     int numofcpus = (int)sysconf(_SC_NPROCESSORS_ONLN);
     int radius = strtol(argv[2], NULL, 10);
@@ -469,22 +481,24 @@ int main(int argc, char *argv[])
 
     copy_image(current_image, target);
     copy_image(current_image, tmpTarget);
+
+    long long start, end, cpu_time_used;
+    start = getMs();
     if (mode == 1 || mode == 3)
     {
-        double startTime = (float)clock() / CLOCKS_PER_SEC;
         handleThreads(num, tmpTarget, target, 1, radius);
-        double endTime = (float)clock() / CLOCKS_PER_SEC;
-        unsigned int *a = target->data[177][200];
-        unsigned int *b = target->data[178][200];
-        printf("C -  elapsed: %f\n", endTime - startTime);
+        printf("C: ");
     }
     if (mode == 2 || mode == 3)
     {
-        double startTime = (float)clock() / CLOCKS_PER_SEC;
         handleThreads(num, tmpTarget, target, 2, radius);
-        double endTime = (float)clock() / CLOCKS_PER_SEC;
-        printf("ASM %d threads -  elapsed: %f\n", num, endTime - startTime);
+        printf("ASM");
     }
+    end = getMs();
+    cpu_time_used = end - start;
+    printf("elapsed: %lld\n", cpu_time_used);
+
+    // printf("elapsed %lld \n", cpu_time_used);
 
     printf("DONE\n");
     write_pixel_to_file(target);
@@ -518,6 +532,8 @@ int main(int argc, char *argv[])
         return -1;
     }
 
+    dlclose(Biblioteka);
+    dlclose(Biblioteka2);
     free_image(current_image);
     free_imageInt(target);
     free_imageInt(tmpTarget);
