@@ -111,7 +111,7 @@ extern void box_blur_h(Image *source, Image *target, int w, int end, int radius,
     }
 }
 
-extern Image *gaussian_blur(Image *source, Image *target, int radius, int start, int end)
+extern Image *motion_blur(Image *source, Image *target, int radius, int start, int end)
 {
     int width = source->width;
     box_blur_h(source, target, width, end, radius, start);

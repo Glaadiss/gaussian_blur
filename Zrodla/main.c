@@ -431,8 +431,8 @@ int main(int argc, char *argv[])
         fprintf(stderr, "%s\n", error);
         exit(EXIT_FAILURE);
     }
-    *(void **)(&fun1) = dlsym(Biblioteka, "gaussian_blur");
-    *(void **)(&pixFunc) = dlsym(Biblioteka2, "gaussian_blur");
+    *(void **)(&fun1) = dlsym(Biblioteka, "motion_blur");
+    *(void **)(&pixFunc) = dlsym(Biblioteka2, "motion_blur");
 
     int mode = chooseMode(argv[1]);
     int numofcpus = (int)sysconf(_SC_NPROCESSORS_ONLN);

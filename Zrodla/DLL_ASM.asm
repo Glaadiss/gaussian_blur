@@ -6,9 +6,6 @@
 ;r8 radius
 
 default rel 						; enable rip-relative addressing
-; section .bss
-; blurI: resb 4
-
 
 section .data
 	blurArr dd 0, 0, 0, 0			; blur level buffer
@@ -18,16 +15,16 @@ section .data
 	blurBuff dd 0, 0 ,0 ,0			; increased array with blur level
 
 	next equ 8						; for moving between pointers
-	zero equ 0						;	 
-	one equ 1						;
+	zero equ 0						; static 0 	 
+	one equ 1						; static 1
 
 
 section .text
 
-global _gaussian_blur
+global _motion_blur
 section .text
 
-_gaussian_blur:
+_motion_blur:
 	mov eax, r8d					; mov radius to eax
 	mov dword[blurBuff], eax		; fill blurBuff with radius
 	add dword[blurBuff], eax		; multiply blurBuff x2
@@ -44,10 +41,10 @@ _gaussian_blur:
 	movdqa xmm0, [zeros]
 	; 
 	mov rax, [rdi + r8] 			; n row
-	mov r12, [rax]
-	movdqa xmm1, [r12] 				; left_pix
-	mov r12, [rax + rdx - 8]
-	movdqa xmm2, [r12]	
+	mov r12, [rax]					; first pixel in row to r12
+	movdqa xmm1, [r12] 				; save first pixel in row ro xmm1
+	mov r12, [rax + rdx - 8]		; last pixel in row to r12
+	movdqa xmm2, [r12]				; save last pixel in row ro xmm2
 	movdqa xmm0, xmm1 				; mov left first pix to xmm0 (avg variable)
 	movdqa xmm4, [blurArr] 			; blur value to each cell (radius variable)
 	paddq xmm4, [ones] 				; add one to each cell (radius variable)
@@ -68,13 +65,13 @@ _gaussian_blur:
 	;----------------second looop -----------------;	
 	mov rax, [rdi + r8 ] 			; point to first pixel in row
 	mov r10, 0 						; loop index
-    mov r15, [blurI]				; ri
-	mov rbx, 0	
+    mov r15, [blurI]				; blur value to r15
+	mov rbx, 0						; set 0 to rbx
 	mainLoop:
-		mov r13, [rax + r15]	
+		mov r13, [rax + r15]		; index to first pixel
 		movdqa xmm3, [r13] 			; first_pixel	
-		add rax, rbx
-		mov r13, [rax]
+		add rax, rbx				; add rbx to rax
+		mov r13, [rax]				; index to second pixel
 		movdqa xmm4, [r13] 			; second_pixel
 		
 		;-------- jumps conditions --------
@@ -83,7 +80,7 @@ _gaussian_blur:
 		mov r11, rdx				; tmp value for width
 		sub r11, [blurI]			; tmp = width - blurValue
 		sub r11, 8					; tmp -= 8
-		cmp r10, r11				;	
+		cmp r10, r11				; 
 		jl lessThanWidthMinusRadius ; if widthIndex < width - blurvalue
 		jmp lessThanWidth			; if widthIndex < width
 		;-------- jumps conditions --------
@@ -105,7 +102,7 @@ _gaussian_blur:
 		jmp mainComp
 
 		lessThanWidth:
-		add rbx, next					
+		add rbx, next				;increment rbx by 8
 		movdqa xmm5, xmm2			; temp vector - from right_pixel
 		psubq xmm5, xmm4			; tmp = right pixel - second_pixel
 		paddq xmm0, xmm5			; add tmp to avg
